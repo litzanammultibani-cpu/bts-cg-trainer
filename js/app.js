@@ -37,6 +37,9 @@ const App = {
       case "competences": this.afficherCompetences(); break;
       case "calculs": this.afficherCalculs(params.outil); break;
       case "passeport": this.afficherPasseport(params.ficheId); break;
+      case "annales": this.afficherAnnales(params.annalesId); break;
+      case "ressources": this.afficherRessources(); break;
+      case "planning": this.afficherPlanning(); break;
       case "sauvegarde": this.afficherSauvegarde(); break;
       default: this.afficherDashboard();
     }
@@ -1289,6 +1292,175 @@ const App = {
 
   escape(s) {
     return (s || "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[m]);
+  },
+
+  // ============== ANNALES ==============
+  afficherAnnales(annalesId) {
+    if (annalesId) return this.afficherUneAnnale(annalesId);
+    const html = `
+      <h1>Annales corrigées</h1>
+      <p class="lead">Sujets types BTS CG (E4.1, E5) avec corrigés détaillés. Inspirés du format officiel.</p>
+      <div class="encadre">
+        <strong>Conseil</strong> : à 1-2 mois de l'examen, fais ces sujets <em>en conditions réelles</em> (chronométré, sans regarder le corrigé), puis auto-corrige-toi. Identifie tes faiblesses et reviens dessus dans les cours.
+      </div>
+      <ul class="lesson-list">
+        ${ANNALES.map(a => `
+          <li class="lesson-item" data-annale="${a.id}">
+            <span class="lesson-id">${a.epreuve}</span>
+            <span class="lesson-titre">${a.intitule}</span>
+            <span class="lesson-meta">Coef ${a.coefficient} · ${a.duree}</span>
+          </li>
+        `).join("")}
+      </ul>
+      <h2>Plus d'annales (sources externes gratuites)</h2>
+      <p>Pour t'entraîner avec les vrais sujets passés des sessions précédentes :</p>
+      <ul>
+        <li><a href="https://www.crcf-edu.fr/" target="_blank" rel="noopener">CRCF-edu.fr</a> — Centre national de ressources avec sujets officiels</li>
+        <li><a href="https://siec.education.fr/candidats/docutheque/" target="_blank" rel="noopener">SIEC</a> — Sujets officiels Île-de-France</li>
+        <li><a href="https://www.sujetexamen.com/bts/comptabilite-gestion" target="_blank" rel="noopener">Sujets-examens.com</a> — Annales gratuites</li>
+      </ul>
+    `;
+    this.rendre(html);
+    document.querySelectorAll("[data-annale]").forEach(el => {
+      el.addEventListener("click", () => this.afficherUneAnnale(el.dataset.annale));
+    });
+  },
+
+  afficherUneAnnale(id) {
+    const a = ANNALES.find(x => x.id === id);
+    if (!a) return this.naviguer("annales");
+    let partiesHtml = "";
+    a.parties.forEach(p => {
+      partiesHtml += `<h2>${p.titre}</h2>`;
+      p.questions.forEach(q => {
+        const qid = `${id}-${q.num}`;
+        partiesHtml += `
+          <div class="card">
+            <h3>Question ${q.num}</h3>
+            <p>${q.enonce}</p>
+            <details>
+              <summary><strong>Voir le corrigé</strong></summary>
+              <div class="corrige">${q.corrige}</div>
+            </details>
+          </div>
+        `;
+      });
+    });
+    const html = `
+      <div class="breadcrumb"><a href="#" data-back-annales>← Annales</a></div>
+      <h1>${a.intitule}</h1>
+      <p class="meta">Épreuve ${a.epreuve} · Coefficient ${a.coefficient} · Durée ${a.duree}</p>
+      <div class="encadre">
+        <strong>Contexte :</strong>
+        <p style="white-space:pre-line;">${a.contexte}</p>
+      </div>
+      ${partiesHtml}
+    `;
+    this.rendre(html);
+    document.querySelector("[data-back-annales]").addEventListener("click", e => {
+      e.preventDefault();
+      this.naviguer("annales");
+    });
+  },
+
+  // ============== RESSOURCES ==============
+  afficherRessources() {
+    let blocsHtml = "";
+    Object.keys(RESSOURCES).forEach(key => {
+      const bloc = RESSOURCES[key];
+      blocsHtml += `
+        <section class="groupe-cours">
+          <h2>${bloc.titre}</h2>
+          <p class="meta">${bloc.description}</p>
+          <ul class="lesson-list">
+            ${bloc.items.map(it => `
+              <li class="lesson-item">
+                <span class="lesson-id">${it.type}</span>
+                <span class="lesson-titre"><a href="${it.url}" target="_blank" rel="noopener">${it.nom}</a></span>
+                <span class="lesson-meta">↗</span>
+              </li>
+            `).join("")}
+          </ul>
+        </section>
+      `;
+    });
+    const html = `
+      <h1>Ressources externes</h1>
+      <p class="lead">Tous les liens utiles pour ta formation BTS CG : sources officielles, cours gratuits, YouTube, annales, outils professionnels.</p>
+      <div class="encadre">
+        <strong>Important :</strong> cette app est un outil de synthèse et d'entraînement. Pour la profondeur, complète avec les ressources ci-dessous — surtout les vidéos YouTube (Stéphanie Goujon notamment) et les PDFs CRCF.
+      </div>
+      ${blocsHtml}
+    `;
+    this.rendre(html);
+  },
+
+  // ============== PLANNING ==============
+  afficherPlanning() {
+    const config = PLANNING.charger();
+    const html = `
+      <h1>Planning de révision</h1>
+      <p class="lead">Configure ton planning personnalisé jusqu'à la date de l'examen.</p>
+
+      <div class="card">
+        <label>Date de l'examen :
+          <input type="date" id="dateExamen" value="${config.dateExamen || ''}" />
+        </label>
+        <label>Heures de travail par semaine :
+          <input type="number" id="heuresHebdo" value="${config.heuresHebdo || 20}" min="5" max="60" />
+        </label>
+        <label>Niveau de départ :
+          <select id="niveau">
+            <option value="debutant" ${config.niveau === 'debutant' ? 'selected' : ''}>Débutant complet</option>
+            <option value="intermediaire" ${config.niveau === 'intermediaire' ? 'selected' : ''}>Intermédiaire (notions de base)</option>
+            <option value="avance" ${config.niveau === 'avance' ? 'selected' : ''}>Avancé (besoin d'approfondissement)</option>
+          </select>
+        </label>
+        <button class="btn btn-primary" id="btnGenerer">Générer / mettre à jour le planning</button>
+      </div>
+
+      <div id="planningResultat"></div>
+    `;
+    this.rendre(html);
+
+    const generer = () => {
+      const dateExamen = document.getElementById("dateExamen").value;
+      const heuresHebdo = Number(document.getElementById("heuresHebdo").value);
+      const niveau = document.getElementById("niveau").value;
+      if (!dateExamen) {
+        document.getElementById("planningResultat").innerHTML = '<div class="encadre erreur-box">Choisis d\'abord une date d\'examen.</div>';
+        return;
+      }
+      PLANNING.sauvegarder({ dateExamen, heuresHebdo, niveau });
+      const p = PLANNING.genererPlanning({ dateExamen, heuresHebdo, niveau });
+      if (p.erreur) {
+        document.getElementById("planningResultat").innerHTML = `<div class="encadre erreur-box">${p.erreur}</div>`;
+        return;
+      }
+      const phasesHtml = p.phases.map(ph => `
+        <li><strong>Semaines ${ph.debut + 1} à ${ph.fin}</strong> (${ph.fin - ph.debut} sem) — <strong>${ph.focus}</strong> : ${ph.description}</li>
+      `).join("");
+      const semainesHtml = p.semainesDetail.map(s => `
+        <details>
+          <summary><strong>Semaine ${s.numero}</strong> (à partir du ${this.formaterDate(s.dateDebut)}) — ${s.focus}</summary>
+          <p class="meta">${s.description}</p>
+          <ul>${s.objectifs.map(o => `<li>${o}</li>`).join("")}</ul>
+        </details>
+      `).join("");
+      document.getElementById("planningResultat").innerHTML = `
+        <div class="cards">
+          <div class="card"><div class="card-stat">${p.semainesTotal}</div><div class="card-label">semaines</div></div>
+          <div class="card"><div class="card-stat">${p.heuresTotal}</div><div class="card-label">heures total</div></div>
+          <div class="card"><div class="card-stat">${p.heuresHebdo}</div><div class="card-label">h/semaine</div></div>
+        </div>
+        <h2>Plan d'ensemble (phases)</h2>
+        <ul>${phasesHtml}</ul>
+        <h2>Programme détaillé semaine par semaine</h2>
+        ${semainesHtml}
+      `;
+    };
+    document.getElementById("btnGenerer").addEventListener("click", generer);
+    if (config.dateExamen) generer();
   },
 
   // ============== SAUVEGARDE ==============
